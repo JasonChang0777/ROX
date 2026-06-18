@@ -1,10 +1,18 @@
+import sys
 from pathlib import Path
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-TEMPLATE_DIR = PROJECT_DIR / "templates"
-DEBUG_DIR = PROJECT_DIR / "debug"
-LOG_DIR = PROJECT_DIR / "logs"
+if getattr(sys, "frozen", False):
+    RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", PROJECT_DIR))
+    DATA_DIR = Path(sys.executable).resolve().parent
+else:
+    RESOURCE_DIR = PROJECT_DIR
+    DATA_DIR = PROJECT_DIR
+
+TEMPLATE_DIR = RESOURCE_DIR / "templates"
+DEBUG_DIR = DATA_DIR / "debug"
+LOG_DIR = DATA_DIR / "logs"
 LOG_FILE = LOG_DIR / "fishing_bot.log"
 
 # The game title may use either a plain O or an umlaut depending on the client.
@@ -83,14 +91,17 @@ MOUSE_RELEASE_SETTLE_SECONDS = 0.100
 # requires ROX and this process to run at the same privilege level.
 CLICK_MODE = "sendinput"
 RESTORE_CURSOR_AFTER_CLICK = True
-# Screen capture requires ROX to stay in the foreground. Enable this only
-# with a capture mode that can keep reading an occluded game window.
-RESTORE_FOREGROUND_AFTER_CLICK = False
+# Restore the previously focused window after each click. This keeps fishing
+# scans mostly in the background and only focuses ROX for the actual action.
+RESTORE_FOREGROUND_AFTER_CLICK = True
 FOCUS_MESSAGE_SETTLE_SECONDS = 0.050
 
 # ROX uses DirectX and commonly returns a black frame through PrintWindow.
 # Screen capture requires the game to remain visible and not be minimized.
 CAPTURE_MODE = "screen"
+# When disabled, screen capture keeps scanning even if ROX is not foreground.
+# Use only when the target ROX window remains visible and is not covered.
+PAUSE_SCREEN_CAPTURE_WHEN_BACKGROUND = False
 
 # Screen capture must not be covered by the OpenCV preview window.
 SHOW_PREVIEW = False

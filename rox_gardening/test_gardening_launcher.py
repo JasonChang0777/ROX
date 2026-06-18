@@ -1,16 +1,18 @@
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 from unittest.mock import patch
 
 from window_capture import ClientBounds, WindowInfo
 
 
-LAUNCHER_PATH = Path(__file__).with_name("gardening_launcher.pyw")
+LAUNCHER_PATH = Path(__file__).with_name("rox_bot_launcher.pyw")
 SPEC = importlib.util.spec_from_file_location("gardening_launcher", LAUNCHER_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError(f"Unable to load {LAUNCHER_PATH}")
 launcher = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = launcher
 SPEC.loader.exec_module(launcher)
 
 
@@ -39,6 +41,23 @@ class GardeningLauncherTests(unittest.TestCase):
 
         self.assertEqual(command[-2:], ["--hwnd", "67890"])
         self.assertTrue(command[1].endswith("fishing_bot.py"))
+
+    def test_packaged_command_starts_bot_executable(self) -> None:
+        command = launcher.bot_command(
+            "園藝",
+            12345,
+            executable=Path("C:/ROX Bot/ROX Bot.exe"),
+            frozen=True,
+        )
+
+        self.assertEqual(
+            command,
+            [
+                str(Path("C:/ROX Bot/ROX Gardening Bot.exe").resolve()),
+                "--hwnd",
+                "12345",
+            ],
+        )
 
     def test_only_exact_rox_title_is_treated_as_game(self) -> None:
         self.assertTrue(launcher.is_game_window(WindowInfo(1, "RöX", 10)))

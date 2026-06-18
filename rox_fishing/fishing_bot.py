@@ -185,6 +185,10 @@ def main() -> None:
     logger.info("=== ROX Fishing Bot started ===")
     logger.info("Game window: %s (handle=%s)", title, hwnd)
     logger.info("Capture=%s, click=%s", cfg.CAPTURE_MODE, cfg.CLICK_MODE)
+    logger.info(
+        "Pause screen capture in background: %s",
+        cfg.PAUSE_SCREEN_CAPTURE_WHEN_BACKGROUND,
+    )
     logger.info("Press %s to stop.", cfg.STOP_KEY_NAME)
     logger.info(
         "Fixed cast point ratio: x=%.4f, y=%.4f",
@@ -257,6 +261,7 @@ def main() -> None:
             check_stop_key()
             if (
                 cfg.CAPTURE_MODE == "screen"
+                and cfg.PAUSE_SCREEN_CAPTURE_WHEN_BACKGROUND
                 and not is_window_foreground(hwnd)
             ):
                 if not capture_paused:

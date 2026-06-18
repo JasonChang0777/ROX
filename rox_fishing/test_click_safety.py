@@ -12,7 +12,16 @@ class SendInputClickSafetyTests(unittest.TestCase):
     )
     @patch.object(window_capture.user32, "SetCursorPos", return_value=1)
     @patch.object(window_capture.user32, "GetCursorPos", return_value=1)
+    @patch.object(window_capture.user32, "BringWindowToTop", return_value=1)
+    @patch.object(window_capture.user32, "GetWindowThreadProcessId", return_value=1)
+    @patch.object(window_capture.kernel32, "GetCurrentThreadId", return_value=2)
+    @patch.object(window_capture.user32, "AttachThreadInput", return_value=1)
     @patch.object(window_capture.user32, "SetForegroundWindow", return_value=1)
+    @patch.object(
+        window_capture.user32,
+        "GetForegroundWindow",
+        side_effect=[202, 202, 202, 101],
+    )
     @patch.object(window_capture.user32, "IsIconic", return_value=0)
     @patch.object(
         window_capture,
@@ -25,7 +34,12 @@ class SendInputClickSafetyTests(unittest.TestCase):
         send_input,
         _bounds,
         _is_iconic,
+        _get_foreground,
         _set_foreground,
+        _attach_thread_input,
+        _current_thread,
+        _window_thread,
+        _bring_top,
         get_cursor,
         set_cursor,
         _sleep,

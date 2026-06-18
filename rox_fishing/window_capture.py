@@ -27,6 +27,7 @@ import config as cfg
 
 logger = logging.getLogger(__name__)
 gdi32 = ctypes.windll.gdi32
+kernel32 = ctypes.windll.kernel32
 
 WM_LBUTTONDOWN = 0x0201
 WM_LBUTTONUP = 0x0202
@@ -231,8 +232,39 @@ def is_window_foreground(hwnd: int) -> bool:
 def activate_window(hwnd: int) -> None:
     if user32.IsIconic(hwnd):
         user32.ShowWindow(hwnd, 9)
-    user32.SetForegroundWindow(hwnd)
+    if user32.GetForegroundWindow() != hwnd:
+        foreground = user32.GetForegroundWindow()
+        current_thread = kernel32.GetCurrentThreadId()
+        foreground_thread = (
+            user32.GetWindowThreadProcessId(foreground, None)
+            if foreground
+            else 0
+        )
+        attached = bool(
+            foreground_thread
+            and foreground_thread != current_thread
+            and user32.AttachThreadInput(
+                current_thread,
+                foreground_thread,
+                True,
+            )
+        )
+        try:
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(
+                    current_thread,
+                    foreground_thread,
+                    False,
+                )
     time.sleep(cfg.FOREGROUND_SETTLE_SECONDS)
+    if user32.GetForegroundWindow() != hwnd:
+        raise RuntimeError(
+            "Unable to activate the selected ROX window. Run the launcher "
+            "as administrator when the game is elevated."
+        )
 
 
 def capture_screen(hwnd: int) -> np.ndarray:
@@ -403,10 +435,7 @@ def click_client(
         previous_foreground = user32.GetForegroundWindow()
         previous_cursor = wintypes.POINT()
         cursor_saved = bool(user32.GetCursorPos(ctypes.byref(previous_cursor)))
-        if user32.IsIconic(hwnd):
-            user32.ShowWindow(hwnd, 9)
-        user32.SetForegroundWindow(hwnd)
-        time.sleep(cfg.FOREGROUND_SETTLE_SECONDS)
+        activate_window(hwnd)
 
         screen_x = bounds.left + x
         screen_y = bounds.top + y

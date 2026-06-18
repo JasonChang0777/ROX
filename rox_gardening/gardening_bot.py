@@ -69,6 +69,75 @@ def wait_for_answer_text(
     return False
 
 
+def enter_answer_with_retries(hwnd: int, dialog, answer: int) -> bool:
+    expected_answer = str(answer)
+    max_attempts = cfg.VERIFY_ANSWER_RETRY_ATTEMPTS + 1
+
+    for attempt in range(1, max_attempts + 1):
+        if attempt > 1:
+            logger.warning(
+                "Retrying answer input: attempt=%s/%s",
+                attempt,
+                max_attempts,
+            )
+            click_client(hwnd, keypad_point(dialog, "clear"), cfg.CLICK_MODE)
+            interruptible_sleep(cfg.KEYPAD_CLICK_INTERVAL_SECONDS)
+            if not wait_for_answer_text(hwnd, dialog, ""):
+                logger.warning("Answer field did not clear before retry.")
+
+        expected_text = ""
+        matched = True
+        for digit in expected_answer:
+            expected_text += digit
+            check_stop_key()
+            click_client(hwnd, keypad_point(dialog, digit), cfg.CLICK_MODE)
+            interruptible_sleep(cfg.KEYPAD_CLICK_INTERVAL_SECONDS)
+            if wait_for_answer_text(hwnd, dialog, expected_text):
+                continue
+
+            frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+            save_debug("verification_answer_mismatch.png", frame)
+            logger.warning(
+                "Answer field did not become %s on attempt %s/%s.",
+                expected_text,
+                attempt,
+                max_attempts,
+            )
+            matched = False
+            break
+
+        if not matched:
+            continue
+
+        final_frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+        final_digits, final_confidence = read_answer_digits(final_frame, dialog)
+        if final_digits == expected_answer:
+            logger.info(
+                "Answer confirmed in field: %s confidence=%.3f",
+                final_digits,
+                final_confidence,
+            )
+            return True
+
+        save_debug("verification_answer_mismatch.png", final_frame)
+        logger.warning(
+            "Final answer mismatch on attempt %s/%s: expected=%s actual=%s "
+            "confidence=%.3f",
+            attempt,
+            max_attempts,
+            expected_answer,
+            final_digits or "<empty>",
+            final_confidence,
+        )
+
+    logger.error(
+        "Answer field did not become %s after %s retries.",
+        expected_answer,
+        cfg.VERIFY_ANSWER_RETRY_ATTEMPTS,
+    )
+    return False
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ROX Gardening Bot")
     selection = parser.add_mutually_exclusive_group()
@@ -181,44 +250,8 @@ def answer_verification(hwnd: int, frame, dialog) -> bool:
         cfg.CLICK_MODE,
     )
     interruptible_sleep(cfg.VERIFY_OPEN_DELAY_SECONDS)
-    expected_text = ""
-    for digit in str(equation.answer):
-        expected_text += digit
-        check_stop_key()
-        click_client(
-            hwnd,
-            keypad_point(latest_dialog, digit),
-            cfg.CLICK_MODE,
-        )
-        interruptible_sleep(cfg.KEYPAD_CLICK_INTERVAL_SECONDS)
-        if not wait_for_answer_text(hwnd, latest_dialog, expected_text):
-            frame = capture_window(hwnd, cfg.CAPTURE_MODE)
-            save_debug("verification_answer_mismatch.png", frame)
-            logger.error(
-                "Answer field did not become %s; digit will not be retried.",
-                expected_text,
-            )
-            return False
-
-    final_frame = capture_window(hwnd, cfg.CAPTURE_MODE)
-    final_digits, final_confidence = read_answer_digits(
-        final_frame,
-        latest_dialog,
-    )
-    if final_digits != str(equation.answer):
-        save_debug("verification_answer_mismatch.png", final_frame)
-        logger.error(
-            "Final answer mismatch: expected=%s actual=%s confidence=%.3f",
-            equation.answer,
-            final_digits or "<empty>",
-            final_confidence,
-        )
+    if not enter_answer_with_retries(hwnd, latest_dialog, equation.answer):
         return False
-    logger.info(
-        "Answer confirmed in field: %s confidence=%.3f",
-        final_digits,
-        final_confidence,
-    )
 
     click_client(hwnd, keypad_point(latest_dialog, "enter"), cfg.CLICK_MODE)
     interruptible_sleep(cfg.KEYPAD_CLICK_INTERVAL_SECONDS)

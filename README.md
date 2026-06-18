@@ -24,17 +24,27 @@ python -m venv .venv
 
 ## 分享給其他人
 
-不能只傳送 `.bat` 檔。啟動器需要本專案的 Python 程式、辨識模板及套件。
-請讓使用者下載完整 `ROX` 資料夾，並在自己的電腦執行：
+建議製作 Windows 發行包。收件者不需要安裝 Python，解壓縮後直接雙擊
+`bot.bat` 即可。
 
 ```powershell
 cd ROX
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\build_release.bat
 ```
 
-完成後雙擊 `啟動ROX Bot.bat`。若要提供不必安裝 Python 的版本，需要另外
-製作包含程式與模板的 Windows 執行檔發行包。
+建置完成後會產生：
+
+```text
+dist\ROX Bot\
+dist\ROX-Bot-Windows.zip
+```
+
+將 `ROX-Bot-Windows.zip` 傳給其他人。對方必須完整解壓縮，不能只取出
+`bot.bat`；發行資料夾內的 EXE、`_internal` 與其他檔案都必須保留。
+
+建置腳本若發現既有的 `build\rox_bot`、`dist\ROX Bot` 或 ZIP，會停止而不
+覆寫。確認舊產物不再需要後，請自行移走再重新建置。
 
 ## 執行
 

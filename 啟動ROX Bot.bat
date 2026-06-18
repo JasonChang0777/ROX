@@ -9,4 +9,4 @@ if not exist ".venv\Scripts\pythonw.exe" (
     exit /b 1
 )
 
-start "" ".venv\Scripts\pythonw.exe" ".\rox_gardening\gardening_launcher.pyw"
+start "" ".venv\Scripts\pythonw.exe" ".\rox_gardening\rox_bot_launcher.pyw"

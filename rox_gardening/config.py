@@ -1,10 +1,18 @@
+import sys
 from pathlib import Path
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-TEMPLATE_DIR = PROJECT_DIR / "templates"
-DEBUG_DIR = PROJECT_DIR / "debug"
-LOG_DIR = PROJECT_DIR / "logs"
+if getattr(sys, "frozen", False):
+    RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", PROJECT_DIR))
+    DATA_DIR = Path(sys.executable).resolve().parent
+else:
+    RESOURCE_DIR = PROJECT_DIR
+    DATA_DIR = PROJECT_DIR
+
+TEMPLATE_DIR = RESOURCE_DIR / "templates"
+DEBUG_DIR = DATA_DIR / "debug"
+LOG_DIR = DATA_DIR / "logs"
 LOG_FILE = LOG_DIR / "gardening_bot.log"
 
 # The game title can contain either a plain O or an umlaut.
@@ -56,6 +64,7 @@ VERIFY_OPEN_DELAY_SECONDS = 0.50
 KEYPAD_CLICK_INTERVAL_SECONDS = 0.30
 ANSWER_CHECK_TIMEOUT_SECONDS = 1.0
 ANSWER_CHECK_INTERVAL_SECONDS = 0.10
+VERIFY_ANSWER_RETRY_ATTEMPTS = 2
 VERIFY_RESULT_WAIT_SECONDS = 1.0
 VERIFY_READ_TIMEOUT_SECONDS = 4.0
 VERIFY_READ_INTERVAL_SECONDS = 0.20
