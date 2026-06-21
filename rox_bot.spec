@@ -6,6 +6,7 @@ from pathlib import Path
 project_dir = Path(SPECPATH)
 gardening_dir = project_dir / "rox_gardening"
 fishing_dir = project_dir / "rox_fishing"
+diamond_dir = project_dir / "rox_diamond"
 
 launcher_analysis = Analysis(
     [str(gardening_dir / "rox_bot_launcher.pyw")],
@@ -45,10 +46,23 @@ fishing_analysis = Analysis(
     excludes=[],
     noarchive=False,
 )
+diamond_analysis = Analysis(
+    [str(diamond_dir / "diamond_bot.py")],
+    pathex=[str(diamond_dir)],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+)
 
 launcher_pyz = PYZ(launcher_analysis.pure)
 gardening_pyz = PYZ(gardening_analysis.pure)
 fishing_pyz = PYZ(fishing_analysis.pure)
+diamond_pyz = PYZ(diamond_analysis.pure)
 
 launcher_exe = EXE(
     launcher_pyz,
@@ -89,17 +103,33 @@ fishing_exe = EXE(
     console=True,
     disable_windowed_traceback=False,
 )
+diamond_exe = EXE(
+    diamond_pyz,
+    diamond_analysis.scripts,
+    [],
+    exclude_binaries=True,
+    name="ROX Diamond Buyer Bot",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+)
 
 release = COLLECT(
     launcher_exe,
     gardening_exe,
     fishing_exe,
+    diamond_exe,
     launcher_analysis.binaries,
     launcher_analysis.datas,
     gardening_analysis.binaries,
     gardening_analysis.datas,
     fishing_analysis.binaries,
     fishing_analysis.datas,
+    diamond_analysis.binaries,
+    diamond_analysis.datas,
     strip=False,
     upx=True,
     upx_exclude=[],

@@ -22,10 +22,12 @@ ROOT_DIR = PROJECT_DIR.parent
 BOT_SCRIPT_PATHS = {
     "園藝": PROJECT_DIR / "gardening_bot.py",
     "釣魚": ROOT_DIR / "rox_fishing" / "fishing_bot.py",
+    "鑽石": ROOT_DIR / "rox_diamond" / "diamond_bot.py",
 }
 PACKAGED_BOT_NAMES = {
     "園藝": "ROX Gardening Bot.exe",
     "釣魚": "ROX Fishing Bot.exe",
+    "鑽石": "ROX Diamond Buyer Bot.exe",
 }
 CREATE_NEW_CONSOLE = 0x00000010
 SW_SHOWNORMAL = 1
@@ -190,6 +192,12 @@ class GardeningLauncher:
             command=lambda: self.start_bot("釣魚"),
         )
         self.fishing_button.pack(side="left", padx=(8, 0))
+        self.diamond_button = ttk.Button(
+            controls,
+            text="啟動鑽石",
+            command=lambda: self.start_bot("鑽石"),
+        )
+        self.diamond_button.pack(side="left", padx=(8, 0))
         self.stop_button = ttk.Button(
             controls,
             text="停止選取 Bot",

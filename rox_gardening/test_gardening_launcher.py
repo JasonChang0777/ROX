@@ -42,6 +42,16 @@ class GardeningLauncherTests(unittest.TestCase):
         self.assertEqual(command[-2:], ["--hwnd", "67890"])
         self.assertTrue(command[1].endswith("fishing_bot.py"))
 
+    def test_diamond_command_uses_selected_handle(self) -> None:
+        command = launcher.bot_command(
+            "鑽石",
+            24680,
+            executable=Path("C:/ROX/.venv/Scripts/python.exe"),
+        )
+
+        self.assertEqual(command[-2:], ["--hwnd", "24680"])
+        self.assertTrue(command[1].endswith("diamond_bot.py"))
+
     def test_packaged_command_starts_bot_executable(self) -> None:
         command = launcher.bot_command(
             "園藝",
