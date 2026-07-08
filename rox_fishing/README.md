@@ -29,6 +29,15 @@ cd D:\ai-agent-project\ROX
 .\.venv\Scripts\python.exe .\rox_fishing\fishing_bot.py
 ```
 
+指定完成 25 次釣魚後自動停止：
+
+```powershell
+.\.venv\Scripts\python.exe .\rox_fishing\fishing_bot.py --count 25
+```
+
+從 ROX Bot 啟動器按「啟動釣魚」時，會先詢問釣魚次數。釣魚 Bot
+不再辨識魚餌，完成指定次數後結束。
+
 有多個 ROX 視窗時，先執行 `--list-windows`，再指定序號或 HWND：
 
 ```powershell
@@ -83,11 +92,6 @@ CAST_BUTTON_POINT = (0.84921875, 0.7333333333333333)
 Bot 只使用這個固定比例座標，不需要額外校準。若遊戲 UI 改版導致位置偏移，
 直接修改 `CAST_BUTTON_POINT`。
 
-## 魚餌模板
-
-`templates\empty_bait.png` 是專案內建資源，用來辨識有限魚餌用完後出現的
-無限初始魚餌。使用者不需要執行任何校正或產生模板。
-
 ## 雙螢幕與 DPI
 
 程式使用 Per-Monitor DPI V2 與實體像素座標，可支援不同解析度或縮放比例的
@@ -132,8 +136,6 @@ PowerShell 或 VS Code 也必須使用系統管理員權限。
 - `bite_latest.png`：等待上鉤時每秒更新的最新偵測區域。
 - `bite_baseline.png`：拋竿後建立的固定比較基準，不會持續更新。
 - `green_peak.png`：本輪最高上鉤變化分數的畫面。
-- `bait_panel_target.png`：目前找到的魚餌區域。
-- `out_of_bait.png`：判定有限魚餌用完時的魚餌圖。
 
 查看偵錯圖片前建議先按 `Q` 停止 Bot。執行中切到 IDE 時，程式會暫停螢幕
 辨識，避免把 IDE 畫面當成遊戲畫面。
@@ -142,14 +144,9 @@ PowerShell 或 VS Code 也必須使用系統管理員權限。
 
 Log 主要顯示：
 
-- `worm`：目前魚餌圖與無限初始魚餌外形的相似度。
-- `infinity`：無限符號的相似度。
-- `bait`：`limited`、`starter` 或 `unknown`。
+- `Fishing progress`：目前已完成次數與目標次數。
 - `bite`：目前提竿區域相對基準圖新增的亮綠色比例。
 - `green`：提竿區域本身的綠色比例，主要供診斷參考。
-
-`unknown` 不會觸發拋竿，避免在魚餌畫面不清楚時誤操作。相關門檻位於
-`config.py`。
 
 ## 測試
 
@@ -167,5 +164,4 @@ cd D:\ai-agent-project\ROX\rox_fishing
 
 ## 待辦
 
-- 支援 `--count` 指定預計完成的釣魚輪數。
 - 為各狀態加入最長停留時間與逾時偵錯截圖。

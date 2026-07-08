@@ -2,8 +2,13 @@
 
 Start ROX, open Trading House, and switch to the Diamond page before running.
 The bot scans for the market buy button, opens the purchase dialog, enters the
-maximum quantity by pressing `9` five times, confirms the keypad, and clicks the
+maximum quantity by pressing `9` four times, confirms the keypad, and clicks the
 purchase button.
+If the purchase dialog stays open after clicking purchase, the bot closes that
+dialog and returns to scanning the Diamond page. The close action uses the
+detected pink `X` button position, with retries if the dialog remains open.
+Quantity entry uses one foreground activation followed by fast consecutive
+clicks for the four digits, keypad confirmation, and purchase button.
 
 The default stop key is `Q`.
 

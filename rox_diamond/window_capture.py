@@ -251,7 +251,13 @@ def release_mouse_buttons() -> None:
     _send_mouse_input(MOUSEEVENTF_LEFTUP)
 
 
-def click_client(hwnd: int, point: tuple[int, int], mode: str) -> None:
+def click_client(
+    hwnd: int,
+    point: tuple[int, int],
+    mode: str,
+    *,
+    activate: bool = True,
+) -> None:
     if mode == "background":
         x, y = point
         packed = (y << 16) | (x & 0xFFFF)
@@ -273,7 +279,8 @@ def click_client(hwnd: int, point: tuple[int, int], mode: str) -> None:
     bounds = get_client_bounds(hwnd)
     previous_cursor = wintypes.POINT()
     cursor_saved = bool(user32.GetCursorPos(ctypes.byref(previous_cursor)))
-    activate_window(hwnd)
+    if activate:
+        activate_window(hwnd)
 
     screen_x = bounds.left + point[0]
     screen_y = bounds.top + point[1]

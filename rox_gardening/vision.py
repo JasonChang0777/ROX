@@ -128,7 +128,76 @@ def _verification_controls_present(frame: np.ndarray, rect: Rect) -> bool:
     return dark_ratio >= 0.35 and blue_ratio >= 0.20
 
 
+def _dialog_from_confirm_button(frame: np.ndarray) -> Rect | None:
+    search, offset_x, offset_y = crop_ratio(frame, cfg.VERIFY_SEARCH_ROI)
+    hsv = cv2.cvtColor(search, cv2.COLOR_BGR2HSV)
+    blue = cv2.inRange(
+        hsv,
+        np.array((85, 35, 130), dtype=np.uint8),
+        np.array((125, 255, 255), dtype=np.uint8),
+    )
+    blue = cv2.morphologyEx(
+        blue,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (9, 5)),
+    )
+    contours, _ = cv2.findContours(
+        blue,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+
+    frame_height, frame_width = frame.shape[:2]
+    candidates: list[tuple[float, Rect]] = []
+    for contour in contours:
+        x, y, width, height = cv2.boundingRect(contour)
+        aspect = width / max(1, height)
+        if not 2.2 <= aspect <= 5.0:
+            continue
+        if not 0.08 <= width / frame_width <= 0.25:
+            continue
+        if not 0.04 <= height / frame_height <= 0.15:
+            continue
+
+        center_x = offset_x + x + width // 2
+        center_y = offset_y + y + height // 2
+        if not 0.30 <= center_x / frame_width <= 0.70:
+            continue
+        if not 0.55 <= center_y / frame_height <= 0.82:
+            continue
+
+        dialog_width = round(
+            width / cfg.VERIFY_CONFIRM_BUTTON_WIDTH_RATIO
+        )
+        dialog_height = round(
+            height / cfg.VERIFY_CONFIRM_BUTTON_HEIGHT_RATIO
+        )
+        left = max(0, center_x - dialog_width // 2)
+        top = max(
+            0,
+            round(center_y - dialog_height * cfg.VERIFY_CONFIRM_POINT[1]),
+        )
+        if left + dialog_width > frame_width:
+            left = frame_width - dialog_width
+        if top + dialog_height > frame_height:
+            top = frame_height - dialog_height
+        rect = Rect(left, top, dialog_width, dialog_height)
+        if not _verification_controls_present(frame, rect):
+            continue
+
+        center_distance = abs(center_x / frame_width - 0.5)
+        candidates.append((width * height - center_distance * 1000.0, rect))
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
+
+
 def find_verification_dialog(frame: np.ndarray) -> Rect | None:
+    control_dialog = _dialog_from_confirm_button(frame)
+    if control_dialog is not None:
+        return control_dialog
+
     search, offset_x, offset_y = crop_ratio(frame, cfg.VERIFY_SEARCH_ROI)
     hsv = cv2.cvtColor(search, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(
@@ -266,14 +335,10 @@ def _equation_region(frame: np.ndarray, dialog: Rect) -> np.ndarray:
 def read_equation(frame: np.ndarray, dialog: Rect) -> EquationResult | None:
     image = _equation_region(frame, dialog)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # Equation glyphs use a bright white fill with a dark outline. Matching
-    # the fill keeps adjacent outlined characters separated.
+    # The game uses a dark fill with a bright outline. At smaller window sizes,
+    # opening splits outlined digits such as "8" into separate upper/lower
+    # contours, so preserve the original bright mask.
     glyph_mask = cv2.inRange(gray, 235, 255)
-    glyph_mask = cv2.morphologyEx(
-        glyph_mask,
-        cv2.MORPH_OPEN,
-        np.ones((2, 2), dtype=np.uint8),
-    )
     contours, _ = cv2.findContours(
         glyph_mask,
         cv2.RETR_EXTERNAL,
@@ -387,6 +452,41 @@ def read_answer_digits(frame: np.ndarray, dialog: Rect) -> tuple[str, float]:
         digits.append(best_digit)
         scores.append(max(0.0, best_score))
     return "".join(digits), min(scores, default=0.0)
+
+
+def is_keypad_open(frame: np.ndarray, dialog: Rect) -> bool:
+    """Return whether the distinctive clear and enter keys are visible."""
+    frame_height, frame_width = frame.shape[:2]
+
+    def key_color_ratio(key: str, color: str) -> float:
+        center_x, center_y = keypad_point(dialog, key)
+        half_width = max(8, round(dialog.width * 0.045))
+        half_height = max(8, round(dialog.height * 0.065))
+        left = max(0, center_x - half_width)
+        right = min(frame_width, center_x + half_width + 1)
+        top = max(0, center_y - half_height)
+        bottom = min(frame_height, center_y + half_height + 1)
+        if left >= right or top >= bottom:
+            return 0.0
+
+        hsv = cv2.cvtColor(frame[top:bottom, left:right], cv2.COLOR_BGR2HSV)
+        hue = hsv[:, :, 0]
+        saturation = hsv[:, :, 1]
+        value = hsv[:, :, 2]
+        if color == "red":
+            mask = (hue >= 165) & (saturation >= 45) & (value >= 65)
+        else:
+            mask = (
+                (hue >= 35)
+                & (hue <= 85)
+                & (saturation >= 45)
+                & (value >= 65)
+            )
+        return float(np.count_nonzero(mask) / mask.size)
+
+    clear_ratio = key_color_ratio("clear", "red")
+    enter_ratio = key_color_ratio("enter", "green")
+    return clear_ratio >= 0.20 and enter_ratio >= 0.20
 
 
 def keypad_point(dialog: Rect, key: str) -> tuple[int, int]:

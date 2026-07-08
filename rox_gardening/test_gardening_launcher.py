@@ -37,10 +37,34 @@ class GardeningLauncherTests(unittest.TestCase):
             "釣魚",
             67890,
             executable=Path("C:/ROX/.venv/Scripts/python.exe"),
+            fishing_count=25,
         )
 
-        self.assertEqual(command[-2:], ["--hwnd", "67890"])
+        self.assertEqual(
+            command[-4:],
+            ["--hwnd", "67890", "--count", "25"],
+        )
         self.assertTrue(command[1].endswith("fishing_bot.py"))
+
+    def test_packaged_fishing_command_includes_count(self) -> None:
+        command = launcher.bot_command(
+            "釣魚",
+            67890,
+            executable=Path("C:/ROX Bot/ROX Bot.exe"),
+            frozen=True,
+            fishing_count=12,
+        )
+
+        self.assertEqual(
+            command,
+            [
+                str(Path("C:/ROX Bot/ROX Fishing Bot.exe").resolve()),
+                "--hwnd",
+                "67890",
+                "--count",
+                "12",
+            ],
+        )
 
     def test_diamond_command_uses_selected_handle(self) -> None:
         command = launcher.bot_command(

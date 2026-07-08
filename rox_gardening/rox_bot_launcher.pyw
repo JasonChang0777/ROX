@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, simpledialog, ttk
 
 import config as cfg
 from window_capture import (
@@ -81,6 +81,7 @@ def bot_command(
     hwnd: int,
     executable: str | Path = sys.executable,
     frozen: bool | None = None,
+    fishing_count: int | None = None,
 ) -> list[str]:
     if frozen is None:
         frozen = bool(getattr(sys, "frozen", False))
@@ -96,14 +97,17 @@ def bot_command(
         raise ValueError(f"Unknown bot: {bot_name}") from exc
 
     if frozen:
-        return [str(bot_path), "--hwnd", str(hwnd)]
-
-    return [
-        str(console_python(executable)),
-        str(bot_path),
-        "--hwnd",
-        str(hwnd),
-    ]
+        command = [str(bot_path), "--hwnd", str(hwnd)]
+    else:
+        command = [
+            str(console_python(executable)),
+            str(bot_path),
+            "--hwnd",
+            str(hwnd),
+        ]
+    if bot_name == "釣魚" and fishing_count is not None:
+        command.extend(["--count", str(fishing_count)])
+    return command
 
 
 def normalized_window_title(title: str) -> str:
@@ -342,7 +346,24 @@ class GardeningLauncher:
             self.update_controls()
             return
 
-        command = bot_command(bot_name, window.hwnd)
+        fishing_count = None
+        if bot_name == "釣魚":
+            fishing_count = simpledialog.askinteger(
+                "釣魚次數",
+                "請輸入要完成的釣魚次數：",
+                parent=self.root,
+                initialvalue=10,
+                minvalue=1,
+                maxvalue=9999,
+            )
+            if fishing_count is None:
+                return
+
+        command = bot_command(
+            bot_name,
+            window.hwnd,
+            fishing_count=fishing_count,
+        )
         bot_path = Path(command[0] if getattr(sys, "frozen", False) else command[1])
         try:
             process = subprocess.Popen(

@@ -44,14 +44,18 @@ VERIFY_DIALOG_MIN_AREA_RATIO = 0.10
 VERIFY_DIALOG_MAX_AREA_RATIO = 0.55
 VERIFY_DIALOG_MIN_ASPECT = 1.20
 VERIFY_DIALOG_MAX_ASPECT = 2.20
+# The blue confirm button is more stable than the pale dialog outline, which
+# can merge with the character illustration. Use it to infer dialog bounds.
+VERIFY_CONFIRM_BUTTON_WIDTH_RATIO = 0.36
+VERIFY_CONFIRM_BUTTON_HEIGHT_RATIO = 0.16
 
 # Points are relative to the detected verification dialog. The keypad opens
 # to the right and can extend beyond the dialog bounds.
 VERIFY_INPUT_POINT = (0.50, 0.53)
 VERIFY_CONFIRM_POINT = (0.50, 0.85)
-VERIFY_ANSWER_ROI = (0.50, 0.48, 0.66, 0.60)
+VERIFY_ANSWER_ROI = (0.42, 0.48, 0.66, 0.60)
 # Calibrated from the visible in-game keypad at a 1280x720 client size.
-KEYPAD_COLUMN_RATIOS = (0.912, 1.036, 1.160, 1.286)
+KEYPAD_COLUMN_RATIOS = (0.912, 1.066, 1.220, 1.374)
 KEYPAD_ROW_RATIOS = (0.55, 0.78, 1.01)
 KEYPAD_LAYOUT = (
     ("1", "2", "3", "clear"),
@@ -60,7 +64,9 @@ KEYPAD_LAYOUT = (
 )
 
 POLL_INTERVAL_SECONDS = 0.10
-VERIFY_OPEN_DELAY_SECONDS = 0.50
+KEYPAD_OPEN_TIMEOUT_SECONDS = 0.80
+KEYPAD_OPEN_CHECK_INTERVAL_SECONDS = 0.10
+KEYPAD_OPEN_RETRY_ATTEMPTS = 2
 KEYPAD_CLICK_INTERVAL_SECONDS = 0.30
 ANSWER_CHECK_TIMEOUT_SECONDS = 1.0
 ANSWER_CHECK_INTERVAL_SECONDS = 0.10

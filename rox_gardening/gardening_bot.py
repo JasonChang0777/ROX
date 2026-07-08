@@ -11,6 +11,7 @@ import config as cfg
 from vision import (
     find_verification_dialog,
     inspect_garden_button,
+    is_keypad_open,
     keypad_point,
     read_answer_digits,
     read_equation,
@@ -138,6 +139,47 @@ def enter_answer_with_retries(hwnd: int, dialog, answer: int) -> bool:
     return False
 
 
+def wait_for_keypad(hwnd: int, dialog) -> bool:
+    deadline = time.monotonic() + cfg.KEYPAD_OPEN_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        check_stop_key()
+        frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+        if is_keypad_open(frame, dialog):
+            return True
+        interruptible_sleep(cfg.KEYPAD_OPEN_CHECK_INTERVAL_SECONDS)
+    return False
+
+
+def ensure_keypad_open(hwnd: int, dialog) -> bool:
+    max_attempts = cfg.KEYPAD_OPEN_RETRY_ATTEMPTS + 1
+    input_point = dialog.relative_point(cfg.VERIFY_INPUT_POINT)
+
+    for attempt in range(1, max_attempts + 1):
+        frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+        if is_keypad_open(frame, dialog):
+            logger.info("Verification keypad is already open.")
+            return True
+
+        if attempt > 1:
+            logger.warning(
+                "Verification keypad did not open; retrying: attempt=%s/%s",
+                attempt,
+                max_attempts,
+            )
+        click_client(hwnd, input_point, cfg.CLICK_MODE)
+        if wait_for_keypad(hwnd, dialog):
+            logger.info("Verification keypad opened on attempt %s.", attempt)
+            return True
+
+    frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+    save_debug("verification_keypad_not_open.png", frame)
+    logger.error(
+        "Verification keypad did not open after %s attempts.",
+        max_attempts,
+    )
+    return False
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ROX Gardening Bot")
     selection = parser.add_mutually_exclusive_group()
@@ -244,12 +286,8 @@ def answer_verification(hwnd: int, frame, dialog) -> bool:
         equation.answer,
         equation.confidence,
     )
-    click_client(
-        hwnd,
-        latest_dialog.relative_point(cfg.VERIFY_INPUT_POINT),
-        cfg.CLICK_MODE,
-    )
-    interruptible_sleep(cfg.VERIFY_OPEN_DELAY_SECONDS)
+    if not ensure_keypad_open(hwnd, latest_dialog):
+        return False
     if not enter_answer_with_retries(hwnd, latest_dialog, equation.answer):
         return False
 

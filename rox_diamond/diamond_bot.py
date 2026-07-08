@@ -12,7 +12,9 @@ from vision import (
     Rect,
     find_market_buy_button,
     find_purchase_dialog,
+    find_purchase_dialog_close_button,
     keypad_point,
+    read_dark_digits,
     read_today_limit,
 )
 from window_capture import (
@@ -105,6 +107,21 @@ def save_debug(name: str, frame) -> None:
     cv2.imwrite(str(cfg.DEBUG_DIR / name), frame)
 
 
+def capture_rox(hwnd: int):
+    last_warning = 0.0
+    while True:
+        try:
+            if cfg.CLICK_MODE == "sendinput":
+                activate_window(hwnd)
+            return capture_window(hwnd, cfg.CAPTURE_MODE)
+        except RuntimeError as exc:
+            now = time.monotonic()
+            if now - last_warning >= cfg.DIAGNOSTIC_INTERVAL_SECONDS:
+                logger.warning("ROX is not ready for capture: %s Retrying.", exc)
+                last_warning = now
+            interruptible_sleep(cfg.POLL_INTERVAL_SECONDS)
+
+
 def list_windows() -> None:
     matches = find_windows(cfg.WINDOW_TITLE_KEYWORDS)
     if not matches:
@@ -127,14 +144,12 @@ def list_windows() -> None:
 
 
 def stable_today_limit(hwnd: int, dialog: Rect) -> int | None:
-    stable_value: int | None = None
-    stable_reads = 0
     last_digits = ""
     last_confidence = 0.0
 
-    for _ in range(cfg.TODAY_LIMIT_REQUIRED_READS + 2):
+    for read_index in range(cfg.TODAY_LIMIT_MAX_READS):
         check_stop_key()
-        frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+        frame = capture_rox(hwnd)
         refreshed = find_purchase_dialog(frame)
         if refreshed is not None:
             dialog = refreshed
@@ -147,18 +162,15 @@ def stable_today_limit(hwnd: int, dialog: Rect) -> int | None:
             digits or "<none>",
             confidence,
         )
-        if value is None:
-            stable_value = None
-            stable_reads = 0
-        elif value == stable_value:
-            stable_reads += 1
-        else:
-            stable_value = value
-            stable_reads = 1
 
-        if stable_reads >= cfg.TODAY_LIMIT_REQUIRED_READS:
-            return stable_value
-        interruptible_sleep(0.15)
+        if value is None:
+            interruptible_sleep(cfg.TODAY_LIMIT_RETRY_INTERVAL_SECONDS)
+            continue
+        if value != 0:
+            return value
+        if read_index + 1 >= cfg.TODAY_LIMIT_ZERO_CONFIRM_READS:
+            return value
+        interruptible_sleep(cfg.TODAY_LIMIT_RETRY_INTERVAL_SECONDS)
 
     logger.warning(
         "Could not get a stable daily limit read; last digits=%s confidence=%.3f.",
@@ -168,7 +180,41 @@ def stable_today_limit(hwnd: int, dialog: Rect) -> int | None:
     return None
 
 
-def enter_max_quantity(hwnd: int, dialog: Rect) -> None:
+def read_dialog_quantity(frame, dialog: Rect) -> int | None:
+    roi = dialog.relative_rect(cfg.QUANTITY_VALUE_ROI)
+    image = frame[roi.top : roi.top + roi.height, roi.left : roi.left + roi.width]
+    digits, confidence = read_dark_digits(image)
+    if digits is None:
+        logger.info("Dialog quantity read: unreadable confidence=%.3f", confidence)
+        return None
+    logger.info("Dialog quantity read: value=%s confidence=%.3f", digits, confidence)
+    return int(digits)
+
+
+def target_quantity_from_limit(today_limit: int | None) -> int | None:
+    if today_limit is None:
+        return None
+    return max(1, today_limit // cfg.DIAMOND_UNITS_PER_QUANTITY)
+
+
+def click_quantity_plus(hwnd: int, dialog: Rect, click_count: int) -> None:
+    bounded_count = min(click_count, cfg.MAX_PLUS_CLICK_COUNT)
+    if bounded_count <= 0:
+        return
+    if bounded_count < click_count:
+        logger.warning(
+            "Quantity plus fallback capped: requested=%s capped=%s",
+            click_count,
+            bounded_count,
+        )
+    point = dialog.relative_point(cfg.QUANTITY_PLUS_POINT)
+    logger.info("Quantity plus fallback: clicks=%s point=%s", bounded_count, point)
+    for _ in range(bounded_count):
+        click_client(hwnd, point, cfg.CLICK_MODE, activate=False)
+        interruptible_sleep(cfg.PLUS_CLICK_INTERVAL_SECONDS)
+
+
+def enter_max_quantity(hwnd: int, dialog: Rect, target_quantity: int | None) -> None:
     click_client(hwnd, dialog.relative_point(cfg.QUANTITY_FIELD_POINT), cfg.CLICK_MODE)
     interruptible_sleep(cfg.ACTION_INTERVAL_SECONDS)
 
@@ -177,11 +223,57 @@ def enter_max_quantity(hwnd: int, dialog: Rect) -> None:
             hwnd,
             keypad_point(dialog, cfg.MAX_QUANTITY_DIGIT),
             cfg.CLICK_MODE,
+            activate=False,
         )
         interruptible_sleep(cfg.KEYPAD_DIGIT_INTERVAL_SECONDS)
 
-    click_client(hwnd, keypad_point(dialog, "enter"), cfg.CLICK_MODE)
+    click_client(
+        hwnd,
+        keypad_point(dialog, "enter"),
+        cfg.CLICK_MODE,
+        activate=False,
+    )
     interruptible_sleep(cfg.ACTION_INTERVAL_SECONDS)
+
+    frame = capture_rox(hwnd)
+    refreshed = find_purchase_dialog(frame)
+    if refreshed is not None:
+        dialog = refreshed
+    current_quantity = read_dialog_quantity(frame, dialog)
+    if (
+        target_quantity is not None
+        and target_quantity > 1
+        and (current_quantity is None or current_quantity < target_quantity)
+    ):
+        starting_quantity = current_quantity if current_quantity is not None else 1
+        click_quantity_plus(hwnd, dialog, target_quantity - starting_quantity)
+        interruptible_sleep(cfg.ACTION_INTERVAL_SECONDS)
+
+        frame = capture_rox(hwnd)
+        refreshed = find_purchase_dialog(frame)
+        if refreshed is not None:
+            dialog = refreshed
+        read_dialog_quantity(frame, dialog)
+
+
+def close_purchase_dialog(hwnd: int, dialog: Rect) -> None:
+    for attempt in range(1, cfg.CLOSE_DIALOG_ATTEMPTS + 1):
+        frame = capture_rox(hwnd)
+        close_button = find_purchase_dialog_close_button(frame)
+        point = (
+            close_button.center
+            if close_button is not None
+            else dialog.relative_point(cfg.PURCHASE_DIALOG_CLOSE_POINT)
+        )
+        click_client(hwnd, point, cfg.CLICK_MODE)
+        logger.info("Purchase dialog close button clicked. attempt=%s point=%s", attempt, point)
+        interruptible_sleep(cfg.AFTER_DIALOG_CLOSE_WAIT_SECONDS)
+
+        frame = capture_rox(hwnd)
+        if find_purchase_dialog(frame) is None:
+            return
+
+    logger.warning("Purchase dialog remained open after close attempts.")
 
 
 def buy_from_dialog(hwnd: int, dialog: Rect) -> None:
@@ -201,17 +293,36 @@ def buy_from_dialog(hwnd: int, dialog: Rect) -> None:
     else:
         logger.info("Today diamond purchase limit: %s", today_limit)
 
-    enter_max_quantity(hwnd, dialog)
-    click_client(hwnd, dialog.relative_point(cfg.PURCHASE_BUTTON_POINT), cfg.CLICK_MODE)
+    target_quantity = target_quantity_from_limit(today_limit)
+    if target_quantity is not None:
+        logger.info("Target purchase quantity: %s", target_quantity)
+
+    enter_max_quantity(hwnd, dialog, target_quantity)
+    click_client(
+        hwnd,
+        dialog.relative_point(cfg.PURCHASE_BUTTON_POINT),
+        cfg.CLICK_MODE,
+        activate=False,
+    )
     logger.info("Purchase button clicked.")
     interruptible_sleep(cfg.AFTER_PURCHASE_WAIT_SECONDS)
+
+    frame = capture_rox(hwnd)
+    remaining_dialog = find_purchase_dialog(frame)
+    if remaining_dialog is not None:
+        logger.warning(
+            "Purchase dialog is still open after purchase; closing it and "
+            "returning to market scan."
+        )
+        save_debug("diamond_purchase_dialog_still_open.png", frame)
+        close_purchase_dialog(hwnd, remaining_dialog)
 
 
 def wait_for_dialog(hwnd: int) -> Rect | None:
     deadline = time.monotonic() + cfg.DIALOG_WAIT_SECONDS
     while time.monotonic() < deadline:
         check_stop_key()
-        frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+        frame = capture_rox(hwnd)
         dialog = find_purchase_dialog(frame)
         if dialog is not None:
             save_debug("diamond_dialog_detected.png", frame)
@@ -221,7 +332,7 @@ def wait_for_dialog(hwnd: int) -> Rect | None:
 
 
 def inspect_frame(hwnd: int) -> None:
-    frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+    frame = capture_rox(hwnd)
     output = frame.copy()
     button = find_market_buy_button(frame)
     if button is None:
@@ -297,7 +408,7 @@ def main() -> None:
         while True:
             check_stop_key()
             now = time.monotonic()
-            frame = capture_window(hwnd, cfg.CAPTURE_MODE)
+            frame = capture_rox(hwnd)
 
             dialog = find_purchase_dialog(frame)
             if dialog is not None:
@@ -340,6 +451,9 @@ def main() -> None:
         logger.info("%s Task complete.", exc)
     except (KeyboardInterrupt, StopRequested):
         logger.info("Stopped by user.")
+    except Exception:
+        logger.exception("Diamond bot stopped because of an unexpected error.")
+        raise
     finally:
         release_mouse_buttons()
         logger.info("=== ROX Diamond Buyer Bot stopped ===")

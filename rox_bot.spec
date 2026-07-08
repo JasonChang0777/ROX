@@ -36,9 +36,7 @@ fishing_analysis = Analysis(
     [str(fishing_dir / "fishing_bot.py")],
     pathex=[str(fishing_dir)],
     binaries=[],
-    datas=[
-        (str(fishing_dir / "templates" / "empty_bait.png"), "templates"),
-    ],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

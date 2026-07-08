@@ -91,6 +91,8 @@ def find_market_buy_button(frame: np.ndarray) -> ButtonMatch | None:
             continue
         image = orange[y : y + height, x : x + width]
         ratio = float(np.count_nonzero(image) / max(1, image.size))
+        if ratio < cfg.ORANGE_BUTTON_MIN_FILL_RATIO:
+            continue
         rect = Rect(offset_x + x, offset_y + y, width, height)
         score = area * ratio
         candidate = ButtonMatch(rect, ratio)
@@ -99,7 +101,7 @@ def find_market_buy_button(frame: np.ndarray) -> ButtonMatch | None:
     return best[1] if best is not None else None
 
 
-def find_purchase_dialog(frame: np.ndarray) -> Rect | None:
+def find_purchase_dialog_close_button(frame: np.ndarray) -> Rect | None:
     search, offset_x, offset_y = crop_ratio(frame, cfg.BUY_DIALOG_CLOSE_SEARCH_ROI)
     hsv = cv2.cvtColor(search, cv2.COLOR_BGR2HSV)
     pink_low = cv2.inRange(
@@ -121,6 +123,7 @@ def find_purchase_dialog(frame: np.ndarray) -> Rect | None:
     )
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+    best: tuple[float, Rect] | None = None
     for contour in contours:
         area = cv2.contourArea(contour)
         if area < cfg.PINK_CLOSE_MIN_AREA:
@@ -128,7 +131,16 @@ def find_purchase_dialog(frame: np.ndarray) -> Rect | None:
         x, y, width, height = cv2.boundingRect(contour)
         aspect = width / max(1, height)
         if 0.65 <= aspect <= 1.45:
-            return fixed_dialog_rect(frame)
+            rect = Rect(offset_x + x, offset_y + y, width, height)
+            if best is None or area > best[0]:
+                best = (area, rect)
+    return best[1] if best is not None else None
+
+
+def find_purchase_dialog(frame: np.ndarray) -> Rect | None:
+    close_button = find_purchase_dialog_close_button(frame)
+    if close_button is not None:
+        return fixed_dialog_rect(frame)
     return None
 
 
